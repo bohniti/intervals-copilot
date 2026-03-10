@@ -1,4 +1,5 @@
 
+import os
 import requests, base64
 
 invoke_url = "https://integrate.api.nvidia.com/v1/chat/completions"
@@ -6,7 +7,7 @@ stream = True
 
 
 headers = {
-  "Authorization": "Bearer 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",
+  "Authorization": f"Bearer {os.environ['NVIDIA_API_KEY']}",
   "Accept": "text/event-stream" if stream else "application/json"
 }
 
