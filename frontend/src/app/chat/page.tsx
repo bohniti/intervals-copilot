@@ -18,12 +18,8 @@ function ActivityProposal({
   const rows: [string, string | number][] = (
     [
       ["Type", data.activity_type?.replace(/_/g, " ")],
+      ["Tags", data.tags && data.tags.length > 0 ? data.tags.join(", ") : undefined],
       ["Date", data.date ? new Date(data.date).toLocaleDateString() : undefined],
-      ["Route", data.route_name],
-      ["Grade", data.grade ? `${data.grade}${data.grade_system ? ` (${data.grade_system})` : ""}` : undefined],
-      ["Style", data.climb_style],
-      ["Pitches", data.pitches],
-      ["Height", data.height_m ? `${data.height_m} m` : undefined],
       ["Area", data.area],
       ["Location", data.location_name],
       ["Partner", data.partner],
