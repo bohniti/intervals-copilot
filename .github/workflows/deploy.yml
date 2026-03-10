@@ -39,7 +39,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://journal:journal@localhost:5432/journal
           NVIDIA_API_KEY: test-key
         run: |
-          uv sync --dev
+          uv sync --extra dev
           uv run pytest tests/ -v
 
   build-and-push:
