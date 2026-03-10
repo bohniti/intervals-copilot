@@ -24,7 +24,7 @@ services:
       INTERVALS_ICU_ATHLETE_ID: ${INTERVALS_ICU_ATHLETE_ID}
       INTERVALS_ICU_API_KEY: ${INTERVALS_ICU_API_KEY}
       BRAVE_API_KEY: ${BRAVE_API_KEY}
-      CORS_ORIGINS: '["https://tbohnstedt.com"]'
+      CORS_ORIGINS: '["https://tbohnstedt.cloud"]'
     depends_on:
       postgres:
         condition: service_healthy
