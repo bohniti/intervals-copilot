@@ -40,7 +40,7 @@ export default function MapPage() {
       // Fetch runtime API key
       let apiKey: string;
       try {
-        const res = await fetch("/api/map-config");
+        const res = await fetch("/config");
         const data = await res.json();
         if (!data.apiKey) throw new Error(data.error ?? "missing key");
         apiKey = data.apiKey;
