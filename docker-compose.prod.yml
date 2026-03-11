@@ -51,7 +51,7 @@ services:
       - frontend
     restart: unless-stopped
 
-  # ── Observability stack ────────────────────────────────────────────────────
+  # ── Observability stack — Tailscale-only access ────────────────────────────
 
   loki:
     image: grafana/loki:3.2.0
@@ -74,6 +74,7 @@ services:
   grafana:
     image: grafana/grafana:11.4.0
     ports:
+      # iptables DOCKER-USER rules restrict these to Tailscale (100.64.0.0/10) only
       - "3001:3000"
     volumes:
       - grafana_data:/var/lib/grafana
@@ -82,13 +83,13 @@ services:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
       GF_AUTH_ANONYMOUS_ENABLED: "false"
-      GF_SERVER_ROOT_URL: https://tbohnstedt.cloud/grafana
-      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SERVER_ROOT_URL: "http://100.102.206.58:3001"
     restart: unless-stopped
 
   phoenix:
     image: arizephoenix/phoenix:latest
     ports:
+      # iptables DOCKER-USER rules restrict these to Tailscale (100.64.0.0/10) only
       - "6006:6006"   # UI
       - "4317:4317"   # OTLP gRPC collector
     volumes:
