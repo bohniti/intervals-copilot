@@ -22,6 +22,11 @@ class SessionRoute(SQLModel, table=True):
     notes: Optional[str] = None
     sort_order: int = Field(default=0)    # ordering within session
 
+    # Enrichment fields (from blog CSV / manual entry)
+    tries: Optional[int] = None           # attempts before send (1 = flash/OS, 2+ = took multiple goes)
+    stars: Optional[int] = None           # personal rating 0–3 (0=no stars, 3=classic)
+    url: Optional[str] = None            # link to route on thecrag / bergsteigen / mountain project
+
 
 # ─── Pydantic request/response models ─────────────────────────────────────────
 
@@ -36,6 +41,9 @@ class SessionRouteCreate(SQLModel):
     sector: Optional[str] = None
     notes: Optional[str] = None
     sort_order: int = 0
+    tries: Optional[int] = None
+    stars: Optional[int] = None
+    url: Optional[str] = None
 
 
 class SessionRouteUpdate(SQLModel):
@@ -49,6 +57,9 @@ class SessionRouteUpdate(SQLModel):
     sector: Optional[str] = None
     notes: Optional[str] = None
     sort_order: Optional[int] = None
+    tries: Optional[int] = None
+    stars: Optional[int] = None
+    url: Optional[str] = None
 
 
 class SessionRouteOut(SQLModel):
@@ -65,3 +76,6 @@ class SessionRouteOut(SQLModel):
     sector: Optional[str] = None
     notes: Optional[str] = None
     sort_order: int
+    tries: Optional[int] = None
+    stars: Optional[int] = None
+    url: Optional[str] = None

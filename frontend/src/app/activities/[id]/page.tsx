@@ -117,6 +117,26 @@ function RouteRow({
             <label className="block text-xs text-slate-500 mb-1">Sector</label>
             <input className={inputCls} value={form.sector ?? ""} onChange={(e) => setF("sector", e.target.value)} />
           </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Tries</label>
+            <input
+              type="number" min={1} className={inputCls}
+              value={form.tries ?? ""}
+              onChange={(e) => setF("tries", e.target.value ? Number(e.target.value) : null)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Stars (0–3)</label>
+            <input
+              type="number" min={0} max={3} className={inputCls}
+              value={form.stars ?? ""}
+              onChange={(e) => setF("stars", e.target.value ? Number(e.target.value) : null)}
+            />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs text-slate-500 mb-1">URL (thecrag / bergsteigen)</label>
+            <input className={inputCls} value={form.url ?? ""} onChange={(e) => setF("url", e.target.value)} />
+          </div>
           <div className="col-span-2">
             <label className="block text-xs text-slate-500 mb-1">Notes</label>
             <input className={inputCls} value={form.notes ?? ""} onChange={(e) => setF("notes", e.target.value)} />
@@ -144,7 +164,24 @@ function RouteRow({
   return (
     <div className="flex items-center gap-3 p-3 border border-slate-800 rounded-lg text-sm">
       <div className="flex-1 min-w-0">
-        <span className="text-slate-200 font-medium">{route.route_name || "Unnamed"}</span>
+        <div className="flex items-center gap-2">
+          {route.url ? (
+            <a
+              href={route.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-slate-200 font-medium hover:text-emerald-400 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {route.route_name || "Unnamed"} ↗
+            </a>
+          ) : (
+            <span className="text-slate-200 font-medium">{route.route_name || "Unnamed"}</span>
+          )}
+          {route.stars != null && route.stars > 0 && (
+            <span className="text-yellow-400 text-xs">{"★".repeat(route.stars)}</span>
+          )}
+        </div>
         <div className="flex gap-2 mt-0.5 text-xs text-slate-500">
           {route.grade && (
             <span className="font-mono bg-slate-800 px-1.5 py-0.5 rounded">
@@ -152,6 +189,7 @@ function RouteRow({
             </span>
           )}
           {route.style && <span className="capitalize">{route.style.replace(/_/g, " ")}</span>}
+          {route.tries != null && <span>{route.tries} {route.tries === 1 ? "try" : "tries"}</span>}
           {route.pitches && <span>{route.pitches}p</span>}
           {route.height_m && <span>{route.height_m} m</span>}
           {route.sector && <span>{route.sector}</span>}
@@ -368,6 +406,12 @@ function EditForm({
           </div>
         </div>
 
+        {/* Region */}
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Region</label>
+          <input className={inputCls} placeholder="e.g. Fränkische Schweiz, Hohe Wand, Kletterhalle Wien" value={form.region ?? ""} onChange={(e) => set("region", e.target.value)} />
+        </div>
+
         {/* Area */}
         <div>
           <label className="block text-xs text-slate-500 mb-1">Area / Crag</label>
@@ -490,6 +534,7 @@ export default function ActivityDetailPage() {
   const fields: [string, string | number][] = (
     [
       ["Date", new Date(activity.date).toLocaleDateString()],
+      ["Region", activity.region],
       ["Area", activity.area],
       ["Location", activity.location_name],
       ["Partner", activity.partner],

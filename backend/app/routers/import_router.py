@@ -1,15 +1,108 @@
 """
-Bulk import from intervals.icu (Garmin data).
-POST /import/intervals?days_back=365
+Bulk imports:
+  POST /import/intervals?days_back=365   — Garmin via intervals.icu
+  POST /import/blog-csv                  — historical CSV from Vertical Life / Mountain Project
 """
+import csv
+import io
+from collections import defaultdict
 from datetime import datetime
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.database import get_session
-from app.models.activity import Activity, ActivityType, ActivitySource
+from app.models.activity import Activity, ActivityType, ActivitySource, GradeSystem, ClimbStyle
+from app.models.route import SessionRoute
+
+router = APIRouter(tags=["import"])
+
+# ─── Blog CSV: region mapping ──────────────────────────────────────────────────
+# Maps crag/gym name (location column) → human-readable region for filtering
+
+_LOCATION_REGION: dict[str, str] = {
+    # ── Vienna gyms ──────────────────────────────────────────────────────────
+    "Kletterhalle Wien":        "Kletterhalle Wien",
+    "Kletteranlage Flakturm":   "Kletterhalle Wien",
+    "Edelweiss Südstadt":       "Kletterhalle Wien",
+    "Blockfabrik":              "Kletterhalle Wien",
+    "Cube Kletterzentrum":      "Kletterhalle Wien",
+    # ── Austria — Hohe Wand / Niederösterreich ───────────────────────────────
+    "Hohe Wand":                "Hohe Wand",
+    "Johannesbachklamm":        "Hohe Wand",
+    "Ewige Jagdgründe":         "Niederösterreich",
+    "Höllental":                "Niederösterreich",
+    "Thalhofergrat":            "Niederösterreich",
+    "Engelswand":               "Niederösterreich",
+    "Adlitzgräben":             "Niederösterreich",
+    "Schrattenbach":            "Niederösterreich",
+    "Graischenstein":           "Niederösterreich",
+    # ── Austria — Tirol ──────────────────────────────────────────────────────
+    "Oetz":                     "Tirol",
+    "Zemmschlucht":             "Tirol",
+    # ── Austria — Styria / other ─────────────────────────────────────────────
+    "Höllental":                "Niederösterreich",
+    # ── Cala Gonone, Sardinia ────────────────────────────────────────────────
+    "Baunei":                   "Cala Gonone",
+    "Cala Gonone -  Chorro":    "Cala Gonone",
+    "Cala Gonone - Biddiriscottai": "Cala Gonone",
+    "Su Casteddu":              "Cala Gonone",
+    "Pedra Longa":              "Cala Gonone",
+    # ── Kalymnos, Greece ─────────────────────────────────────────────────────
+    "Sabaton":                  "Kalymnos",
+    "Hospital":                 "Kalymnos",
+    "Giggerl":                  "Kalymnos",
+    "Theós":                    "Kalymnos",
+    "Kokkinovrachos":           "Kalymnos",
+    # ── Istria / Croatia ─────────────────────────────────────────────────────
+    "Buzetski kanjon":          "Istria",
+    "Kompanj":                  "Istria",
+    "Kamena vrata":             "Istria",
+    "Čiritež":                  "Istria",
+    # ── North America ────────────────────────────────────────────────────────
+    "Squamish":                 "Squamish",
+    "Royal Arches":             "Yosemite",
+}
+_FRANKEN_DEFAULT = "Fränkische Schweiz"  # fallback for unlisted outdoor locations
+
+
+def _resolve_region(location: str, route_type: str) -> str:
+    if location in _LOCATION_REGION:
+        return _LOCATION_REGION[location]
+    if "GYM" in route_type.upper():
+        return location  # unknown gym → use gym name as its own region
+    return _FRANKEN_DEFAULT
+
+
+# ─── Blog CSV: type / style mapping ───────────────────────────────────────────
+
+_ROUTE_TYPE_MAP: dict[str, tuple[ActivityType, list[str]]] = {
+    "ROUTE":       (ActivityType.sport_climb, ["outdoor"]),
+    "GYM_ROUTE":   (ActivityType.sport_climb, ["indoor"]),
+    "GYM_BOULDER": (ActivityType.bouldering,  ["indoor"]),
+    "BOULDER":     (ActivityType.bouldering,  ["outdoor"]),
+    "Trad":        (ActivityType.sport_climb, ["outdoor", "trad"]),
+    "Sport":       (ActivityType.sport_climb, ["outdoor"]),
+    "Aid":         (ActivityType.sport_climb, ["outdoor", "aid"]),
+    "Sport, Aid":  (ActivityType.sport_climb, ["outdoor", "aid"]),
+}
+
+_STYLE_MAP: dict[str, ClimbStyle] = {
+    "rp": ClimbStyle.redpoint, "Redpoint": ClimbStyle.redpoint,
+    "os": ClimbStyle.onsight,  "Onsight":  ClimbStyle.onsight,
+    "f":  ClimbStyle.flash,    "Flash":    ClimbStyle.flash,
+    "tr": ClimbStyle.top_rope,
+    "go": ClimbStyle.redpoint,   # ground-up treated as redpoint
+    "fh": ClimbStyle.attempt, "Fell/Hung": ClimbStyle.attempt,
+}
+
+
+class BlogCsvImportResult(BaseModel):
+    imported_sessions: int
+    imported_routes: int
+    skipped_sessions: int
+    errors: list[str]
 
 router = APIRouter(tags=["import"])
 
@@ -163,5 +256,155 @@ async def import_from_intervals(
         total_fetched=len(raw_activities),
         imported=imported,
         skipped=skipped,
+        errors=errors,
+    )
+
+
+# ─── Blog CSV import ───────────────────────────────────────────────────────────
+
+@router.post("/import/blog-csv", response_model=BlogCsvImportResult)
+async def import_blog_csv(
+    file: UploadFile = File(..., description="CSV export from Vertical Life / Mountain Project"),
+    db: AsyncSession = Depends(get_session),
+) -> BlogCsvImportResult:
+    """
+    Import historical climbing routes from the blog CSV (Vertical Life / Mountain Project export).
+    Groups rows by (date, location, route_type) into sessions (Activities) with individual
+    SessionRoutes. Already-imported sessions (matched by raw_json import_key) are skipped.
+    """
+    errors: list[str] = []
+
+    # 1. Parse CSV
+    content = await file.read()
+    try:
+        rows = list(csv.DictReader(io.StringIO(content.decode("utf-8"))))
+    except Exception as exc:
+        return BlogCsvImportResult(
+            imported_sessions=0, imported_routes=0, skipped_sessions=0,
+            errors=[f"CSV parse failed: {exc}"],
+        )
+
+    # 2. Group rows → sessions keyed by (date_str, location, route_type)
+    sessions: dict[tuple, list[dict]] = defaultdict(list)
+    for row in rows:
+        raw_date = row.get("date", "")
+        location = (row.get("location") or "").strip()
+        route_type = (row.get("route_type") or "ROUTE").strip()
+        try:
+            date_key = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).date().isoformat()
+        except (ValueError, TypeError):
+            errors.append(f"Bad date '{raw_date}' for route '{row.get('route_name')}' — skipped")
+            continue
+        sessions[(date_key, location, route_type)].append(row)
+
+    # 3. Load existing import keys to enable idempotency
+    existing_result = await db.execute(
+        select(Activity.raw_json).where(Activity.raw_json.isnot(None))
+    )
+    existing_keys: set[str] = set()
+    for (rj,) in existing_result.all():
+        if isinstance(rj, dict) and "import_key" in rj:
+            existing_keys.add(rj["import_key"])
+
+    # 4. Import sessions
+    imported_sessions = 0
+    imported_routes = 0
+    skipped_sessions = 0
+
+    for (date_key, location, route_type), route_rows in sessions.items():
+        import_key = f"blog_csv::{date_key}::{location}::{route_type}"
+        if import_key in existing_keys:
+            skipped_sessions += 1
+            continue
+
+        activity_type, tags = _ROUTE_TYPE_MAP.get(route_type, (ActivityType.sport_climb, ["outdoor"]))
+        region = _resolve_region(location, route_type)
+
+        # Use GPS coords from first route that has them
+        lat, lon = None, None
+        for r in route_rows:
+            try:
+                lat = float(r["latitude"]) if r.get("latitude") else None
+                lon = float(r["longitude"]) if r.get("longitude") else None
+                if lat and lon:
+                    break
+            except (ValueError, TypeError):
+                pass
+
+        try:
+            session_date = datetime.fromisoformat(
+                route_rows[0]["date"].replace("Z", "+00:00")
+            ).replace(tzinfo=None)
+        except (ValueError, TypeError, KeyError):
+            session_date = datetime.utcnow()
+
+        activity = Activity(
+            activity_type=activity_type,
+            title=f"Climbing at {location}",
+            date=session_date,
+            source=ActivitySource.manual,
+            area=location,
+            region=region,
+            tags=tags,
+            lat=lat,
+            lon=lon,
+            raw_json={"import_key": import_key, "csv_source": route_rows[0].get("source", "")},
+        )
+        db.add(activity)
+        await db.flush()  # get activity.id
+
+        for i, r in enumerate(route_rows):
+            try:
+                raw_stars = r.get("stars") or ""
+                stars = round(float(raw_stars)) if raw_stars and raw_stars != "null" else None
+                # Normalize 0-5 scale to 0-3
+                if stars is not None:
+                    stars = min(3, max(0, round(stars * 3 / 5)))
+            except (ValueError, TypeError):
+                stars = None
+
+            try:
+                tries = int(r["tries"]) if r.get("tries") else None
+            except (ValueError, TypeError):
+                tries = None
+
+            raw_height = r.get("height") or ""
+            try:
+                height_m = float(raw_height) if raw_height else None
+            except (ValueError, TypeError):
+                height_m = None
+
+            route = SessionRoute(
+                activity_id=activity.id,
+                route_name=r.get("route_name") or None,
+                grade=r.get("grade") or None,
+                grade_system=GradeSystem.french if r.get("grade") else None,
+                style=_STYLE_MAP.get(r.get("style", ""), None),
+                sector=r.get("sector") or None,
+                height_m=height_m,
+                notes=r.get("comment") or None,
+                stars=stars,
+                tries=tries,
+                url=r.get("url") or None,
+                sort_order=i,
+            )
+            db.add(route)
+            imported_routes += 1
+
+        imported_sessions += 1
+
+    if imported_sessions > 0:
+        try:
+            await db.commit()
+        except Exception as exc:
+            await db.rollback()
+            errors.append(f"DB commit failed: {exc}")
+            imported_sessions = 0
+            imported_routes = 0
+
+    return BlogCsvImportResult(
+        imported_sessions=imported_sessions,
+        imported_routes=imported_routes,
+        skipped_sessions=skipped_sessions,
         errors=errors,
     )

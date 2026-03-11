@@ -69,8 +69,9 @@ class Activity(SQLModel, table=True):
     # e.g. ["indoor"], ["outdoor", "trad"], ["commute"], ["trail_run"]
     tags: list = Field(default_factory=list, sa_column=Column(JSON))
 
-    # Session-level climbing fields (area, partner apply to whole session)
-    area: Optional[str] = None
+    # Session-level climbing fields (area, partner, region apply to whole session)
+    area: Optional[str] = None      # specific crag/gym name, e.g. "Hexenküche"
+    region: Optional[str] = None    # broader grouping for filtering, e.g. "Fränkische Schweiz", "Kletterhalle Wien"
     partner: Optional[str] = None
 
     # Garmin / intervals.icu linkage
@@ -93,6 +94,7 @@ class ActivityCreate(SQLModel):
     source: ActivitySource = ActivitySource.manual
     tags: list[str] = []
     area: Optional[str] = None
+    region: Optional[str] = None
     partner: Optional[str] = None
     intervals_activity_id: Optional[str] = None
     # Optional routes for chat confirmation flow — saved automatically on create
@@ -113,6 +115,7 @@ class ActivityUpdate(SQLModel):
     source: Optional[ActivitySource] = None
     tags: Optional[list[str]] = None
     area: Optional[str] = None
+    region: Optional[str] = None
     partner: Optional[str] = None
     intervals_activity_id: Optional[str] = None
 
@@ -134,5 +137,6 @@ class ActivityOut(SQLModel):
     source: ActivitySource
     tags: list[str] = []
     area: Optional[str] = None
+    region: Optional[str] = None
     partner: Optional[str] = None
     intervals_activity_id: Optional[str] = None

@@ -6,18 +6,29 @@ import Link from "next/link";
 
 export default function ActivitiesPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [regions, setRegions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<ActivityType | "">("");
+  const [filterRegion, setFilterRegion] = useState<string>("");
+
+  // Load available regions once
+  useEffect(() => {
+    api.activities.regions().then(setRegions).catch(() => {});
+  }, []);
 
   useEffect(() => {
-    const params = filterType ? { activity_type: filterType, limit: 200 } : { limit: 200 };
+    setLoading(true);
+    setError(null);
+    const params: Record<string, string | number> = { limit: 200 };
+    if (filterType) params.activity_type = filterType;
+    if (filterRegion) params.region = filterRegion;
     api.activities
       .list(params)
       .then(setActivities)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [filterType]);
+  }, [filterType, filterRegion]);
 
   return (
     <div>
@@ -32,7 +43,7 @@ export default function ActivitiesPage() {
       </div>
 
       {/* Type filter pills */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-3">
         <button
           onClick={() => setFilterType("")}
           className={`text-xs px-3 py-1 rounded-full border transition-colors ${
@@ -41,7 +52,7 @@ export default function ActivitiesPage() {
               : "border-slate-700 text-slate-400 hover:text-slate-200"
           }`}
         >
-          All
+          All types
         </button>
         {(Object.keys(ACTIVITY_TYPE_LABELS) as ActivityType[]).map((t) => (
           <button
@@ -57,6 +68,31 @@ export default function ActivitiesPage() {
           </button>
         ))}
       </div>
+
+      {/* Region filter dropdown — only shown when regions exist */}
+      {regions.length > 0 && (
+        <div className="flex items-center gap-2 mb-6">
+          <span className="text-xs text-slate-500">Region:</span>
+          <select
+            value={filterRegion}
+            onChange={(e) => setFilterRegion(e.target.value)}
+            className="text-xs rounded-lg bg-slate-800 border border-slate-700 px-2 py-1 text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-600"
+          >
+            <option value="">All regions</option>
+            {regions.map((r) => (
+              <option key={r} value={r}>{r}</option>
+            ))}
+          </select>
+          {filterRegion && (
+            <button
+              onClick={() => setFilterRegion("")}
+              className="text-xs text-slate-500 hover:text-slate-300"
+            >
+              ✕ clear
+            </button>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-slate-400 text-sm">Loading activities…</div>
@@ -99,9 +135,21 @@ export default function ActivitiesPage() {
                     ))}
                   </div>
                   <p className="font-medium text-slate-100 truncate">{a.title}</p>
-                  {(a.area || a.location_name) && (
-                    <p className="text-xs text-slate-500 mt-0.5">{a.area ?? a.location_name}</p>
-                  )}
+                  {/* Location: show region > area > location_name */}
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {a.region && (
+                      <span className="text-xs text-slate-500">{a.region}</span>
+                    )}
+                    {a.area && a.area !== a.region && (
+                      <>
+                        {a.region && <span className="text-xs text-slate-700">›</span>}
+                        <span className="text-xs text-slate-500">{a.area}</span>
+                      </>
+                    )}
+                    {!a.region && !a.area && a.location_name && (
+                      <span className="text-xs text-slate-500">{a.location_name}</span>
+                    )}
+                  </div>
                   {/* Stats row */}
                   <div className="flex gap-3 mt-1.5 text-xs text-slate-500">
                     {a.duration_minutes && (

@@ -29,6 +29,7 @@ export interface Activity {
   source: string;
   tags: string[];
   area?: string;
+  region?: string;
   partner?: string;
   intervals_activity_id?: string;
 }
@@ -52,6 +53,9 @@ export interface SessionRoute {
   sector?: string;
   notes?: string;
   sort_order: number;
+  tries?: number;    // attempts before send (1 = onsight/flash, 2+ = multiple goes)
+  stars?: number;    // personal rating 0–3
+  url?: string;      // link to route on thecrag / bergsteigen / mountain project
 }
 
 export interface SessionRouteCreate {
@@ -65,6 +69,9 @@ export interface SessionRouteCreate {
   sector?: string;
   notes?: string;
   sort_order?: number;
+  tries?: number;
+  stars?: number;
+  url?: string;
 }
 
 // ─── Chat types ────────────────────────────────────────────────────────────
@@ -104,6 +111,13 @@ export interface ImportResult {
   total_fetched: number;
   imported: number;
   skipped: number;
+  errors: string[];
+}
+
+export interface BlogCsvImportResult {
+  imported_sessions: number;
+  imported_routes: number;
+  skipped_sessions: number;
   errors: string[];
 }
 
@@ -171,7 +185,7 @@ export const api = {
   },
 
   activities: {
-    list: (params?: { activity_type?: string; limit?: number }) => {
+    list: (params?: { activity_type?: string; region?: string; limit?: number }) => {
       const qs = params
         ? "?" + new URLSearchParams(
             Object.entries(params)
@@ -181,6 +195,7 @@ export const api = {
         : "";
       return request<Activity[]>(`/activities/${qs}`);
     },
+    regions: () => request<string[]>("/activities/regions"),
     get: (id: number) => request<Activity>(`/activities/${id}`),
     create: (data: Partial<Activity> & { routes?: SessionRouteCreate[] }) =>
       request<Activity>("/activities/", { method: "POST", body: JSON.stringify(data) }),
@@ -219,6 +234,21 @@ export const api = {
       request<ImportResult>(`/import/intervals?days_back=${daysBack}`, {
         method: "POST",
       }),
+    blogCsv: (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      const token =
+        typeof window !== "undefined"
+          ? (localStorage.getItem("auth_token") || null)
+          : null;
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      return fetch(`${BACKEND}/import/blog-csv`, {
+        method: "POST",
+        headers,
+        body: form,
+      }).then((r) => r.json() as Promise<BlogCsvImportResult>);
+    },
   },
 
   chat: (messages: ChatMessage[], location_context?: string) =>

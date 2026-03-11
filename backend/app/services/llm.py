@@ -184,7 +184,8 @@ RECORD_ACTIVITY_TOOL = {
                 "location_name": {"type": "string"},
                 "lat": {"type": "number"},
                 "lon": {"type": "number"},
-                "area": {"type": "string", "description": "Climbing area or crag name"},
+                "area": {"type": "string", "description": "Specific climbing area or crag name, e.g. 'Hexenküche', 'Kletterhalle Wien'"},
+                "region": {"type": "string", "description": "Broader region for filtering, e.g. 'Fränkische Schweiz', 'Hohe Wand', 'Kletterhalle Wien', 'Kalymnos', 'Cala Gonone'. Use the same region name consistently."},
                 "partner": {"type": "string"},
                 "notes": {"type": "string"},
                 "intervals_activity_id": {
@@ -393,6 +394,8 @@ def _build_confirmation_text(data: dict) -> str:
     tags = data.get("tags") or []
     if tags:
         parts.append(f"Tags: {', '.join(tags)}")
+    if data.get("region"):
+        parts.append(f"Region: {data['region']}")
     if data.get("area"):
         parts.append(f"Area: {data['area']}")
     if data.get("date"):

@@ -11,9 +11,22 @@ from app.models.route import SessionRoute, SessionRouteCreate
 router = APIRouter(prefix="/activities", tags=["activities"])
 
 
+@router.get("/regions", response_model=list[str])
+async def list_regions(session: AsyncSession = Depends(get_session)):
+    """Return all distinct non-null region values, sorted alphabetically."""
+    result = await session.execute(
+        select(Activity.region)
+        .where(Activity.region.isnot(None))
+        .distinct()
+        .order_by(Activity.region)
+    )
+    return [row[0] for row in result.all()]
+
+
 @router.get("/", response_model=list[ActivityOut])
 async def list_activities(
     activity_type: Optional[ActivityType] = Query(None),
+    region: Optional[str] = Query(None, description="Filter by region, e.g. 'Fränkische Schweiz'"),
     limit: int = Query(50, le=200),
     offset: int = Query(0),
     session: AsyncSession = Depends(get_session),
@@ -21,6 +34,8 @@ async def list_activities(
     stmt = select(Activity).order_by(Activity.date.desc()).limit(limit).offset(offset)
     if activity_type:
         stmt = stmt.where(Activity.activity_type == activity_type)
+    if region:
+        stmt = stmt.where(Activity.region == region)
     result = await session.execute(stmt)
     return result.scalars().all()
 
