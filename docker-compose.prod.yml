@@ -36,6 +36,8 @@ services:
 
   frontend:
     image: ghcr.io/${GITHUB_REPOSITORY}-frontend:latest
+    environment:
+      MAPY_API_KEY: ${MAPY_API_KEY}
     restart: unless-stopped
 
   nginx:

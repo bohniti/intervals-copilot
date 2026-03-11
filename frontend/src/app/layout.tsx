@@ -25,6 +25,9 @@ export default function RootLayout({
           <a href="/activities" className="text-sm text-slate-400 hover:text-slate-100 transition-colors">
             Activities
           </a>
+          <a href="/map" className="text-sm text-slate-400 hover:text-slate-100 transition-colors">
+            Map
+          </a>
           <a href="/chat" className="text-sm text-slate-400 hover:text-slate-100 transition-colors">
             Log Activity
           </a>
