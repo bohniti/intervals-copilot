@@ -28,6 +28,7 @@ services:
       APP_PASSWORD: ${APP_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGINS: '["https://tbohnstedt.cloud"]'
+      PHOENIX_COLLECTOR_ENDPOINT: http://phoenix:4317
     depends_on:
       postgres:
         condition: service_healthy
@@ -50,5 +51,53 @@ services:
       - frontend
     restart: unless-stopped
 
+  # ── Observability stack ────────────────────────────────────────────────────
+
+  loki:
+    image: grafana/loki:3.2.0
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/tmp/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.2.0
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yml
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SERVER_ROOT_URL: https://tbohnstedt.cloud/grafana
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+    restart: unless-stopped
+
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    ports:
+      - "6006:6006"   # UI
+      - "4317:4317"   # OTLP gRPC collector
+    volumes:
+      - phoenix_data:/phoenix
+    environment:
+      PHOENIX_WORKING_DIR: /phoenix
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  loki_data:
+  grafana_data:
+  phoenix_data:

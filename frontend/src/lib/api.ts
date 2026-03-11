@@ -121,21 +121,38 @@ export interface TokenResponse {
 
 // ─── HTTP helper ───────────────────────────────────────────────────────────
 
+function getTokenFromCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|;\s*)auth_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function redirectToLogin() {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem("auth_token");
+  document.cookie = "auth_token=; path=/; max-age=0";
+  window.location.href = "/login";
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+  // Read token from localStorage, fall back to cookie if localStorage was cleared
+  const token =
+    typeof window !== "undefined"
+      ? (localStorage.getItem("auth_token") || getTokenFromCookie())
+      : null;
+
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`${BACKEND}${path}`, {
-    headers,
     ...init,
+    headers: { ...headers, ...(init?.headers as Record<string, string> | undefined) },
   });
 
-  if (res.status === 401 && typeof window !== "undefined" && !path.startsWith("/auth/")) {
-    localStorage.removeItem("auth_token");
-    document.cookie = "auth_token=; path=/; max-age=0";
-    window.location.href = "/login";
-    throw new Error("Unauthorised");
+  // 401 = expired/invalid token, 403 = missing token (FastAPI HTTPBearer behaviour)
+  if ((res.status === 401 || res.status === 403) && !path.startsWith("/auth/")) {
+    redirectToLogin();
+    throw new Error("Session expired — please log in again.");
   }
 
   if (!res.ok) {

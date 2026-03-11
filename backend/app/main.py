@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import logging
+import os
 
 from app.config import get_settings
 from app.dependencies import get_current_user
@@ -8,11 +10,32 @@ from app.routers import activities, chat, auth
 from app.routers import routes as routes_router
 from app.routers import import_router, stats
 
+log = logging.getLogger(__name__)
 settings = get_settings()
+
+
+def _setup_tracing() -> None:
+    """Instrument OpenAI SDK with Phoenix / OpenTelemetry — fails gracefully if not configured."""
+    phoenix_endpoint = os.getenv("PHOENIX_COLLECTOR_ENDPOINT")
+    if not phoenix_endpoint:
+        return
+    try:
+        from phoenix.otel import register
+        from openinference.instrumentation.openai import OpenAIInstrumentor
+
+        tracer_provider = register(
+            project_name="climbers-journal",
+            endpoint=phoenix_endpoint,
+        )
+        OpenAIInstrumentor().instrument(tracer_provider=tracer_provider)
+        log.info("Phoenix tracing enabled → %s", phoenix_endpoint)
+    except Exception as exc:
+        log.warning("Phoenix tracing setup failed (non-fatal): %s", exc)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _setup_tracing()
     # Tables are managed by Alembic migrations — do not call create_all() here
     yield
 
