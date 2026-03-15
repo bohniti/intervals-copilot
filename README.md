@@ -1,6 +1,8 @@
-# Climbers Journal
+# Intervals.icu Copilot
 
-A local-first training journal with an LLM assistant that connects to your [intervals.icu](https://intervals.icu) data. Query your training conversationally — the LLM fetches the data and responds.
+A local-first AI copilot for [intervals.icu](https://intervals.icu). Chat with your training data — ask questions about your workouts, performance trends, and training load, and the LLM fetches the data from intervals.icu and responds conversationally.
+
+Use this as a starting point to build your own training tool on top of intervals.icu.
 
 ## Prerequisites
 
