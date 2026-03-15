@@ -92,13 +92,14 @@ POST /chat
 
 Conversations stored in-memory (dict of message lists) for now. When we add a database, we persist instead — API contract stays the same.
 
-### LLM provider isolation (future-proofing note)
+### Multi-provider LLM support
 
-The MVP uses a single LLM (Kimi K2.5 via Nvidia NIM, OpenAI-compatible `chat.completions.create`). The LLM logic lives entirely in `services/llm.py` — the tool registry, chat router, and frontend have no knowledge of which model is used.
+`services/llm.py` uses a `LLMProvider` dataclass (name, model, base_url, api_key_env) with a registry of providers. Both Kimi K2.5 (Nvidia NIM) and Gemini 2.5 Flash (Google AI) are registered. The tool call loop is shared — providers differ only in config since both expose OpenAI-compatible APIs.
 
-When multiple LLMs are needed, extract a `LLMProvider` interface from `llm.py` with per-provider implementations (NvidiaNIM, Anthropic, OpenAI, etc.). Each provider normalizes its API differences (chat completions vs. messages API vs. responses API) behind a common `chat(messages, tools)` method. The rest of the architecture stays untouched.
-
-Do **not** build this abstraction until a second provider is actually needed.
+- `POST /chat` accepts an optional `provider` field to select the model per-request
+- `GET /providers` lists available provider names
+- `DEFAULT_LLM_PROVIDER` env var sets the default (defaults to `kimi`)
+- Adding a new OpenAI-compatible provider = add one `LLMProvider` entry to the `PROVIDERS` dict
 
 ### Non-streaming first, SSE-ready
 
@@ -169,6 +170,12 @@ CORS_ORIGINS=["http://localhost:3000"]
 - [x] Implement `app/backend/climbers_journal/routers/chat.py` — `POST /chat` with `conversation_id` + in-memory conversation store
 - [x] Wire router in `main.py`
 - [x] Commit: `feat(PROJ-1): LLM chat endpoint with tool use loop`
+
+### Step 3b — Multi-provider LLM support
+- [x] Refactor `services/llm.py` — `LLMProvider` dataclass + provider registry (kimi, gemini)
+- [x] Update `routers/chat.py` — optional `provider` field on request, `GET /providers` endpoint
+- [x] Update `.env.example` — `GOOGLE_API_KEY`, `DEFAULT_LLM_PROVIDER`
+- [x] Commit: `feat(PROJ-1): multi-provider LLM support (kimi + gemini)`
 
 ### Step 4 — Frontend chat UI
 - [ ] Build `app/frontend/src/app/page.tsx` — chat interface (message list + input, auto-scroll, loading state)

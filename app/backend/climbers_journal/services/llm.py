@@ -1,18 +1,15 @@
-"""LLM service — Kimi K2.5 via Nvidia NIM (OpenAI-compatible)."""
+"""LLM service — multi-provider support via OpenAI-compatible API."""
 
 from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
 
 from openai import AsyncOpenAI
 
 from climbers_journal.tools.registry import dispatch, get_all_definitions
 
-_client: AsyncOpenAI | None = None
-
-MODEL = "moonshotai/kimi-k2.5"
-BASE_URL = "https://integrate.api.nvidia.com/v1"
 SYSTEM_PROMPT = (
     "You are a helpful training assistant for a climber and endurance athlete. "
     "You have access to the user's intervals.icu data. "
@@ -23,28 +20,64 @@ SYSTEM_PROMPT = (
 MAX_TOOL_ROUNDS = 10
 
 
-def _get_client() -> AsyncOpenAI:
-    global _client
-    if _client is None:
-        _client = AsyncOpenAI(
-            api_key=os.getenv("NVIDIA_API_KEY", ""),
-            base_url=BASE_URL,
+@dataclass(frozen=True)
+class LLMProvider:
+    name: str
+    model: str
+    base_url: str
+    api_key_env: str
+
+
+PROVIDERS: dict[str, LLMProvider] = {
+    "kimi": LLMProvider(
+        name="kimi",
+        model="moonshotai/kimi-k2.5",
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key_env="NVIDIA_API_KEY",
+    ),
+    "gemini": LLMProvider(
+        name="gemini",
+        model="gemini-2.5-flash",
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        api_key_env="GOOGLE_API_KEY",
+    ),
+}
+
+DEFAULT_PROVIDER = os.getenv("DEFAULT_LLM_PROVIDER", "kimi")
+
+_clients: dict[str, AsyncOpenAI] = {}
+
+
+def _get_client(provider: LLMProvider) -> AsyncOpenAI:
+    if provider.name not in _clients:
+        _clients[provider.name] = AsyncOpenAI(
+            api_key=os.getenv(provider.api_key_env, ""),
+            base_url=provider.base_url,
         )
-    return _client
+    return _clients[provider.name]
 
 
-async def chat(messages: list[dict]) -> str:
+def get_provider(name: str | None = None) -> LLMProvider:
+    key = name or DEFAULT_PROVIDER
+    if key not in PROVIDERS:
+        raise ValueError(f"Unknown LLM provider: {key}. Available: {list(PROVIDERS)}")
+    return PROVIDERS[key]
+
+
+async def chat(messages: list[dict], provider_name: str | None = None) -> str:
     """Run a chat completion with tool use loop.
 
     *messages* is the full conversation history (system + user + assistant msgs).
+    *provider_name* selects which LLM to use (default from env).
     Returns the final assistant text reply.
     """
-    client = _get_client()
+    provider = get_provider(provider_name)
+    client = _get_client(provider)
     tools = get_all_definitions()
 
     for _ in range(MAX_TOOL_ROUNDS):
         response = await client.chat.completions.create(
-            model=MODEL,
+            model=provider.model,
             messages=messages,
             tools=tools if tools else None,
         )
