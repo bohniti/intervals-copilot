@@ -41,6 +41,27 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000) and start chatting.
 
+## Claude Code (gstack)
+
+This project includes [gstack](https://github.com/garrytan/gstack) skills for Claude Code. After cloning, run the one-time setup:
+
+```bash
+cd .claude/skills/gstack && ./setup
+```
+
+Requires [bun](https://bun.sh/). This gives you these slash commands in Claude Code:
+
+| Command | Description |
+|---|---|
+| `/browse` | Headless browser for QA testing and dogfooding |
+| `/qa` | Systematic QA testing with structured reports |
+| `/review` | Pre-landing PR review (diff analysis) |
+| `/ship` | Ship workflow (tests, review, version bump, PR) |
+| `/plan-eng-review` | Engineering plan review |
+| `/plan-ceo-review` | CEO/founder-mode plan review |
+| `/setup-browser-cookies` | Import browser cookies for authenticated testing |
+| `/retro` | Weekly engineering retrospective |
+
 ## Environment Variables
 
 | Variable | Required | Description |

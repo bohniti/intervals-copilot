@@ -56,6 +56,26 @@ cd app/backend && uv run fastapi dev climbers_journal/main.py
 cd app/frontend && pnpm dev
 ```
 
+## gstack
+
+Use `/browse` from gstack for all web browsing. **Never use `mcp__claude-in-chrome__*` tools** — they are slow and unreliable.
+
+Available gstack skills:
+- `/browse` — Headless browser for QA testing and site dogfooding
+- `/qa` — QA testing workflows
+- `/review` — Pre-landing PR review (diff analysis against main)
+- `/ship` — Ship workflow (tests, review, version bump, PR creation)
+- `/plan-eng-review` — Engineering manager-mode plan review
+- `/plan-ceo-review` — CEO/founder-mode plan review (10-star product thinking)
+- `/setup-browser-cookies` — Import browser cookies for authenticated testing
+- `/retro` — Retrospective
+
+**Note:** gstack's `/review` and `/ship` skills are Rails-oriented by default. This project uses FastAPI + Next.js. Adapt test commands accordingly:
+- Backend tests: `cd app/backend && uv run pytest`
+- Frontend tests: `cd app/frontend && pnpm test` (if configured)
+
+**Plans folder:** This project keeps plans in `plans/` as numbered files (`XXXX-name.md`). The project's `/plan` skill creates plans; gstack's `/plan-eng-review` and `/plan-ceo-review` review them. Both coexist — use `/plan` to create, then optionally `/plan-eng-review` or `/plan-ceo-review` to review.
+
 ## Product Context
 
 @docs/PRD.md
