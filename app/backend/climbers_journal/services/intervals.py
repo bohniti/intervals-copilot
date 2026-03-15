@@ -44,11 +44,12 @@ async def get_activities(
 async def get_latest_activity() -> dict:
     """Fetch the most recent activity (last 7 days)."""
     today = date.today()
+    # intervals.icu returns activities newest-first; [0] is the most recent
     activities = await get_activities(
         oldest=(today - timedelta(days=7)).isoformat(),
         newest=today.isoformat(),
     )
-    return activities[-1] if activities else {}
+    return activities[0] if activities else {}
 
 
 async def get_wellness(oldest: str | None = None, newest: str | None = None) -> list[dict]:
